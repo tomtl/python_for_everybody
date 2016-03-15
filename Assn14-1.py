@@ -1,24 +1,54 @@
 import sqlite3
 
-connection = sqlite3.connect('emaildb.sqlite')
-cur = connection.cursor()
+def open_source_data() :
+    # open source data file
+    file_name = raw_input("Enter filename:") or "mbox.txt"
+    file_handler = open(file_name)
+    return file_handler
 
-cur.execute('''
-DROP TABLE IF EXISTS Counts''')
+def count_domains(file) :
+    # count email address domains in original data
+    domain_counts = {}
+    for line in file :
+        if not line.startswith("From: ") :
+            continue
 
-cur.execute('''
-CREATE TABLE Counts (email TEXT, count INTEGER)''')
+        words = line.split()
+        email_address = words[1]
+        email_domain = email_address.split("@")[1]
 
-file_name = raw_input("Enter filename:") or "mbox-short.txt"
-file_handler = open(file_name)
+        domain_counts[email_domain] = domain_counts.get(email_domain, 0) + 1
+    return domain_counts
 
-domain_counts = {}
-for line in file_handler :
-    if not line.startswith("From: ") :
-        continue
+def connect_to_db(db_name) :
+    # connect to sqlite db
+    connection = sqlite3.connect(db_name)
+    cur = connection.cursor()
 
-    words = line.split()
-    email_address = words[1]
-    email_domain = email_address.split("@")[1]
+    return (connection, cur)
 
-    domain_counts[email_domain] = domain_counts.get(email_domain, 0) + 1
+def create_db_table(cursor) :
+    # create sqlite table
+    cursor.execute("DROP TABLE IF EXISTS Counts")
+    cursor.execute("CREATE TABLE Counts (org TEXT, count INTEGER)")
+
+def add_records_to_db(records_dictionary, connection, cursor) :
+    # create records in sqlite table
+    for key, value in records_dictionary.items() :
+        cursor.execute('''
+            INSERT INTO Counts (org, count)
+            VALUES (?, ?)
+        ''', (key, value))
+        print "INSERT", key, value
+
+    connection.commit()
+
+def close_db(cursor) :
+    cursor.close()
+
+input_data = open_source_data()
+domain_counts = count_domains(input_data)
+connection, cursor = connect_to_db("emaildb.sqlite")
+create_db_table(cursor)
+add_records_to_db(domain_counts, connection, cursor)
+close_db(cursor)
